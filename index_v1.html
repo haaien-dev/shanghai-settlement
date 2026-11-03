@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>여행 정산</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#FAFAF8;
+    --line:#E4E2DC;
+    --line-soft:#EEEDE8;
+    --text:#161616;
+    --text-dim:#86857F;
+    --text-faint:#B5B3AC;
+    --ok:#2E8B5F;
+    --ok-bg:#EAF3EC;
+    --warn:#B5482E;
+    --warn-bg:#F7ECE8;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    font-weight:400;-webkit-font-smoothing:antialiased;}
+  .mono{font-family:"SF Mono",ui-monospace,"Roboto Mono","Noto Sans KR",monospace;font-variant-numeric:tabular-nums;letter-spacing:.01em;}
+
+  nav{display:flex;align-items:center;justify-content:space-between;padding:20px 24px;max-width:720px;margin:0 auto;border-bottom:1px solid var(--line);}
+  .brand{font-size:15px;font-weight:600;letter-spacing:-0.01em;}
+  .brand sup{font-size:9px;color:var(--text-faint);font-weight:600;margin-left:2px;}
+
+  .tabs{display:flex;border-bottom:1px solid var(--line);max-width:720px;margin:0 auto;}
+  .tab-btn{flex:1;padding:14px 8px;text-align:center;background:none;border:none;border-bottom:2px solid transparent;
+    font-size:13px;color:var(--text-dim);cursor:pointer;font-family:inherit;font-weight:500;}
+  .tab-btn.active{color:var(--text);border-bottom-color:var(--text);}
+
+  main{max-width:720px;margin:0 auto;padding:32px 24px 80px;}
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .setup-banner{border:1px solid var(--warn);background:var(--warn-bg);color:var(--warn);padding:14px 16px;font-size:13px;line-height:1.6;margin-bottom:24px;}
+
+  .summary-row{display:flex;border:1px solid var(--line);margin-bottom:20px;background:#fff;}
+  .summary-cell{flex:1;padding:18px 20px;border-right:1px solid var(--line);}
+  .summary-cell:last-child{border-right:none;}
+  .summary-cell.wide{flex:1.6;}
+  .summary-label{font-size:10.5px;color:var(--text-dim);letter-spacing:.08em;text-transform:uppercase;font-weight:600;margin-bottom:6px;}
+  .summary-value{font-size:22px;font-weight:300;letter-spacing:-0.01em;}
+  .summary-sub{font-size:12px;color:var(--text-dim);margin-top:2px;}
+
+  h2.section-title{font-size:13px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin:0 0 14px;}
+
+  .debt-list{display:flex;flex-direction:column;}
+  .debt-group-header{font-size:13px;font-weight:700;color:var(--text);margin:36px 0 6px;}
+  .debt-group-header:first-child{margin-top:28px;}
+  .debt-section{border-bottom:1px solid var(--line);padding-bottom:2px;}
+  .debt-group{}
+  .debt-row{display:flex;align-items:center;gap:10px;padding:6px 0;cursor:pointer;}
+  .debt-check{width:18px;height:18px;flex:0 0 18px;border:1px solid var(--text-faint);cursor:pointer;position:relative;background:none;padding:0;}
+  .debt-check.checked{background:var(--ok);border-color:var(--ok);}
+  .debt-check.checked::before,.debt-check.checked::after{
+    content:"";position:absolute;left:50%;bottom:4px;width:2.2px;height:8px;background:#fff;border-radius:1px;transform-origin:bottom center;
+  }
+  .debt-check.checked::before{transform:translateX(-1.1px) rotate(32deg);}
+  .debt-check.checked::after{transform:translateX(-1.1px) rotate(-32deg);}
+  .debt-main{flex:1;font-size:14px;}
+  .debt-amount{font-size:15px;}
+  .debt-expand-toggle{background:none;border:none;cursor:pointer;padding:10px 6px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;}
+  .debt-expand-toggle .chevron{width:9px;height:9px;border-right:2px solid var(--text-dim);border-bottom:2px solid var(--text-dim);transform:rotate(45deg);margin-top:-3px;}
+  .debt-expand-toggle.up .chevron{transform:rotate(-135deg);margin-top:3px;}
+  .debt-detail-list{display:flex;flex-direction:column;gap:2px;padding:0 0 6px 28px;}
+  .debt-detail-row{display:flex;align-items:center;gap:10px;padding:4px 0;}
+  .debt-check-sm{width:14px;height:14px;flex:0 0 14px;border:1px solid var(--text-faint);cursor:pointer;position:relative;background:none;padding:0;}
+  .debt-check-sm.checked{background:var(--ok);border-color:var(--ok);}
+  .debt-check-sm.checked::before,.debt-check-sm.checked::after{
+    content:"";position:absolute;left:50%;bottom:3px;width:1.8px;height:6px;background:#fff;border-radius:1px;transform-origin:bottom center;
+  }
+  .debt-check-sm.checked::before{transform:translateX(-0.9px) rotate(32deg);}
+  .debt-check-sm.checked::after{transform:translateX(-0.9px) rotate(-32deg);}
+  .debt-detail-main{flex:1;font-size:14px;}
+  .debt-detail-memo{color:var(--text-faint);font-size:12.5px;}
+  .debt-detail-amount{font-size:15px;}
+  .empty-state{color:var(--text-dim);font-size:13px;padding:24px 0;text-align:center;border-top:1px solid var(--line);}
+
+  .field{margin-bottom:20px;}
+  .field label{display:block;font-size:11px;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin-bottom:8px;}
+  .pill-group{display:flex;flex-wrap:wrap;gap:8px;}
+  .pill{padding:9px 16px;border:1px solid var(--line);background:none;font-family:inherit;font-size:13px;cursor:pointer;color:var(--text);}
+  .pill.on{background:var(--text);color:#fff;border-color:var(--text);}
+  input[type=text],input[type=number],select{
+    width:100%;padding:11px 12px;border:1px solid var(--line);background:#fff;font-family:inherit;font-size:14px;color:var(--text);
+  }
+  input:focus,select:focus{outline:none;border-color:var(--text);}
+  input[readonly]{background:var(--bg);color:var(--text-dim);}
+  .row-inline{display:flex;gap:10px;}
+  .row-inline > *{flex:1;}
+  .hint-text{font-size:11.5px;color:var(--text-dim);margin-top:6px;line-height:1.5;}
+
+  .split-mode{display:flex;gap:8px;margin-bottom:12px;}
+  .split-list{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);padding:12px;}
+  .split-item{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .split-item span{font-size:13px;}
+  .split-item input{width:110px;}
+  .split-total{display:flex;justify-content:space-between;font-size:12.5px;padding-top:8px;border-top:1px solid var(--line-soft);margin-top:4px;}
+  .split-total.mismatch{color:var(--warn);}
+
+  button.primary{padding:14px;background:var(--text);color:#fff;border:none;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;}
+  button.primary:disabled{background:var(--text-faint);cursor:not-allowed;}
+  button.ghost{padding:10px 16px;background:none;border:1px solid var(--line);color:var(--text-dim);font-family:inherit;font-size:12.5px;cursor:pointer;}
+  .form-actions{display:flex;gap:10px;margin-top:24px;}
+  .form-actions button.primary{flex:1;}
+
+  .stat-list{display:flex;flex-direction:column;border-top:1px solid var(--line);margin-bottom:20px;}
+  .stat-list.nested{border-top:none;margin-bottom:0;}
+  .stat-row{display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:13px;}
+  .stat-row:last-child{border-bottom:none;}
+  .stat-memo{flex:0 0 76px;color:var(--text-dim);}
+  .stat-value{flex:1;text-align:right;}
+  .stat-pct{flex:0 0 40px;text-align:right;color:var(--text-dim);font-size:12px;}
+
+  .stat-box{border:1px solid var(--line);background:#fff;padding:16px 20px 4px;margin-bottom:20px;}
+  .stat-box .summary-label{margin-bottom:10px;}
+
+  .cum-header-flex{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+  .cum-header-text{flex:1;min-width:140px;}
+  .cum-badge-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;flex:0 0 auto;}
+  .cum-badge{padding:4px 9px;border:1px solid var(--line);background:#fff;font-family:inherit;font-size:10.5px;cursor:pointer;text-align:center;white-space:nowrap;}
+  .cum-badge.on{background:var(--text);color:#fff;border-color:var(--text);}
+  .cum-person{padding:16px 0;margin-top:6px;border-top:1px solid var(--line-soft);}
+  .cum-person-header{font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px;}
+  .cum-total{font-size:12.5px;color:var(--text);margin-bottom:15px;}
+  .cum-total .mono{color:var(--text);font-weight:600;}
+  .cum-total-trigger{background:none;border:none;font:inherit;font-family:inherit;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+  .cum-section-label{font-size:12.5px;color:var(--text-dim);margin:16px 0 4px;}
+  .cum-section-label:first-of-type{margin-top:0;}
+  .cum-line{font-size:12.5px;padding:5px 0;display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+  .cum-line.settled{color:var(--ok);}
+  .cum-line.unsettled{color:var(--warn);}
+  .cum-amount{display:flex;align-items:baseline;gap:6px;flex:0 0 auto;}
+  .cum-amount-main{font-size:13px;font-weight:600;}
+  .cum-amount-sub{font-size:10.5px;font-weight:400;opacity:.75;}
+  .cum-empty{font-size:12px;color:var(--text-faint);padding:3px 0;}
+
+  .cum-detail-total-row{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:14px;margin-bottom:8px;border-bottom:1px solid var(--line);}
+  .cum-detail-total-row .label{font-size:13px;color:var(--text-dim);}
+  .cum-detail-total-row .mono{font-size:13px;font-weight:700;color:var(--text);}
+  .cum-detail-total-row .popup-krw{font-size:11px;}
+  .popup-krw{font-weight:400;color:var(--text-dim);}
+  .cat-group{border-bottom:1px solid var(--line);}
+  .cat-group:last-child{border-bottom:none;}
+  .cat-group-header{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:12px 0;gap:10px;}
+  .cat-group-name{font-size:13px;font-weight:400;color:var(--text);}
+  .cat-group-right{display:flex;align-items:center;gap:10px;flex:0 0 auto;}
+  .cat-group-total{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;}
+  .cat-group-total .popup-krw{font-size:11px;}
+  .cat-detail-list{display:flex;flex-direction:column;padding:0 0 12px;}
+  .cat-detail-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;align-items:flex-start;}
+  .cat-detail-left{flex:1;min-width:0;}
+  .cat-detail-num{color:var(--text-dim);margin-right:3px;font-size:13px;}
+  .cat-detail-amount{font-size:13px;}
+  .cat-detail-sub{font-size:11px;color:var(--text-dim);margin-left:5px;font-weight:400;}
+  .cat-detail-memo{display:block;font-size:11px;color:var(--text-dim);margin-top:2px;margin-left:15px;}
+  .cat-detail-right{flex:0 0 auto;text-align:right;max-width:160px;}
+  .cat-detail-total{font-size:11px;color:var(--text-dim);font-weight:400;}
+  .cat-detail-people{font-size:11px;color:var(--text-dim);margin-top:2px;line-height:1.4;}
+
+  .stat-sub{color:var(--text-dim);font-size:11px;margin-left:8px;}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(22,22,22,0.45);display:flex;align-items:center;justify-content:center;z-index:200;padding:24px;}
+  .modal-box{background:#fff;border:1px solid var(--line);padding:28px 24px;max-width:300px;width:100%;text-align:center;}
+  .modal-box.wide{max-width:380px;text-align:left;}
+  .modal-title{font-size:16px;font-weight:600;margin-bottom:20px;}
+  .modal-actions{display:flex;flex-direction:column;gap:10px;}
+  .modal-actions button{width:100%;}
+  .modal-actions.row{flex-direction:row;}
+
+  .rate-nav-btn{background:none;border:none;padding:6px 10px;font-family:inherit;font-size:12px;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;gap:6px;}
+  .rate-nav-btn .mono{color:var(--text);font-weight:400;font-size:12.5px;text-decoration:underline;text-underline-offset:2px;}
+  .live-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block;flex:0 0 7px;}
+  .rate-history-list{display:flex;flex-direction:column;border-top:1px solid var(--line);margin-top:20px;max-height:180px;overflow-y:auto;}
+  .rate-history-row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:12.5px;}
+  .rate-history-date{color:var(--text-dim);}
+  .rate-history-value{font-weight:600;}
+
+  .expense-list{display:flex;flex-direction:column;border-top:1px solid var(--line);}
+  .expense-row{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:14px 0;border-bottom:1px solid var(--line);transition:opacity .2s ease;}
+  .expense-row.settled{opacity:.55;}
+  .expense-info{flex:1;min-width:0;}
+  .expense-memo{font-size:14px;font-weight:500;margin-bottom:5px;}
+  .expense-note{color:var(--text-dim);font-weight:400;}
+  .expense-meta{font-size:12px;color:var(--text-dim);}
+  .expense-right{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
+  .expense-amount-block{text-align:right;}
+  .expense-amount{font-size:16px;white-space:nowrap;}
+  .expense-rate{font-size:11px;color:var(--text-faint);margin-top:2px;white-space:nowrap;}
+  .expense-btn-row{display:flex;gap:6px;}
+  .expense-btn-row button{font-size:11.5px;padding:5px 11px;border:none;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap;}
+  .expense-btn-row .edit-btn{background:var(--text);color:#fff;}
+  .expense-btn-row .del-btn{background:var(--warn);color:#fff;}
+  .settled-badge{font-size:10.5px;padding:4px 8px;background:var(--ok-bg);color:var(--ok);font-weight:600;letter-spacing:.02em;border:none;cursor:pointer;font-family:inherit;text-align:right;}
+
+  .updated-at{font-size:11px;color:var(--text-faint);margin-top:20px;}
+
+  @media (max-width:480px){
+    .summary-row{flex-direction:column;}
+    .summary-cell{border-right:none;border-bottom:1px solid var(--line);}
+    .summary-cell:last-child{border-bottom:none;}
+    .row-inline{flex-direction:column;}
+    .row-inline.keep{flex-direction:row;}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand">여행 정산<sup>주주클럽 상해 여행</sup></div>
+  <button class="rate-nav-btn" id="rateSettingBtn"><span class="live-dot"></span> 기본환율 <span class="mono" id="currentRateDisplay">₩201.73</span></button>
+</nav>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="status">정산 현황</button>
+  <button class="tab-btn" data-tab="list">전체 내역</button>
+  <button class="tab-btn" data-tab="input">지출 입력</button>
+</div>
+
+<main>
+
+  <div id="setupBanner" class="setup-banner" style="display:none;"></div>
+
+  <section class="view active" id="view-status">
+    <h2 class="section-title">정산 필요 금액</h2>
+    <p class="hint-text" style="margin:-6px 0 4px;">정산 완료된 건은 빼고 아직 정산 안 된 것들만 계산한 금액</p>
+    <p class="hint-text" style="margin:0 0 14px;">지출 내역을 바탕으로 자동 계산! 여기서 직접 수정 안 됨! 수정은 전체 내역에서!</p>
+    <div class="debt-list" id="debtList"></div>
+    <button class="primary" id="confirmSettleBtn" style="width:100%;margin-top:16px;" disabled>체크 항목 정산 완료</button>
+  </section>
+
+  <section class="view" id="view-list">
+    <div class="summary-row">
+      <div class="summary-cell">
+        <div class="summary-label">총 지출</div>
+        <div class="summary-value mono" id="totalCny">¥0.00</div>
+        <div class="summary-sub mono" id="totalKrw">₩0</div>
+      </div>
+      <div class="summary-cell wide">
+        <div class="summary-label">카테고리별</div>
+        <div class="stat-list nested" id="categoryStats"></div>
+      </div>
+    </div>
+
+    <div class="stat-box">
+      <div class="summary-label">인원별 결제</div>
+      <div class="stat-list nested" id="payerStats"></div>
+    </div>
+
+    <div class="stat-box">
+      <div class="cum-header-flex">
+        <div class="cum-header-text">
+          <div class="summary-label">누적 정산 현황</div>
+          <p class="hint-text" style="margin:6px 0 0;">인당 정산 재확인용 누적 기록</p>
+        </div>
+        <div class="cum-badge-grid" id="cumBadgeGrid"></div>
+      </div>
+      <div id="cumulativeSummary"></div>
+    </div>
+
+    <div class="expense-list" id="expenseList"></div>
+  </section>
+
+  <section class="view" id="view-input">
+    <div class="field">
+      <label>결제자</label>
+      <div class="pill-group" id="payerGroup"></div>
+    </div>
+
+    <div class="row-inline keep">
+      <div class="field">
+        <label>금액 (CNY ¥)</label>
+        <input type="number" id="cnyInput" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
+      </div>
+      <div class="field">
+        <label>금액 (KRW ₩)</label>
+        <input type="number" id="krwInput" step="1" min="0" placeholder="0" inputmode="numeric">
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin:-8px 0 20px;">
+      <button type="button" class="ghost" id="btnAutoCalc">자동</button>
+      <span class="hint-text" style="margin:0;" id="autoRateHint"></span>
+    </div>
+
+    <div class="field">
+      <label>적용 환율 (KRW/CNY)</label>
+      <input type="number" id="rateInput" readonly placeholder="두 금액을 입력하면 자동 계산">
+      <p class="hint-text">원화 ÷ 위안화로 자동 계산돼요. 저장하면 이 환율이 기본환율로 반영돼요.</p>
+    </div>
+
+    <div class="field">
+      <label>분담 인원</label>
+      <div class="pill-group" id="beneficiaryGroup"></div>
+      <div style="margin-top:8px;">
+        <button type="button" class="ghost" id="btnAllMembers">전체</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>나누는 방법</label>
+      <div class="split-mode">
+        <button type="button" class="pill on" id="splitEqualBtn">인원수대로 n분의 1</button>
+        <button type="button" class="pill" id="splitCustomBtn">인당 금액 따로 입력</button>
+      </div>
+      <div class="split-list" id="customSplitList" style="display:none;"></div>
+    </div>
+
+    <div class="field">
+      <label>적요</label>
+      <select id="memoSelect">
+        <option value="" disabled selected>적요 선택</option>
+        <option value="식비">식비</option>
+        <option value="교통">교통</option>
+        <option value="액티비티">액티비티</option>
+        <option value="쇼핑">쇼핑</option>
+        <option value="기타">기타</option>
+        <option value="__custom">직접입력</option>
+      </select>
+      <input type="text" id="memoCustomInput" placeholder="적요 직접 입력" style="display:none;margin-top:8px;">
+    </div>
+
+    <div class="field">
+      <label>메모</label>
+      <input type="text" id="noteInput" placeholder="선택 입력">
+    </div>
+
+    <div id="editingNotice" class="hint-text" style="display:none;"></div>
+
+    <div class="form-actions">
+      <button class="primary" id="saveBtn">저장</button>
+      <button class="ghost" id="resetBtn">초기화</button>
+      <button class="ghost" id="cancelBtn">취소</button>
+    </div>
+  </section>
+
+  <div class="modal-overlay" id="savedModal" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-title">저장 완료!</div>
+      <div class="modal-actions">
+        <button class="primary" id="modalConfirmBtn">확인</button>
+        <button class="ghost" id="modalContinueBtn">계속 입력하기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="rateModal" style="display:none;">
+    <div class="modal-box wide">
+      <div class="modal-title" style="text-align:center;">기본 환율 변경</div>
+      <div class="field">
+        <label>새 기본 환율 (KRW/CNY)</label>
+        <input type="number" id="newRateInput" step="0.01" min="0" inputmode="decimal">
+      </div>
+      <p class="hint-text" style="margin:-10px 0 16px;">이미 입력·저장된 지출 건에는 영향을 주지 않아요. 이후 '자동' 계산에 이 값이 쓰이고, 새 지출을 저장하면 그 건의 환율로 다시 바뀝니다.</p>
+      <div class="modal-actions row">
+        <button class="ghost" id="rateModalCloseBtn">닫기</button>
+        <button class="primary" id="rateModalSaveBtn">변경</button>
+      </div>
+      <div style="margin-top:22px;">
+        <div class="summary-label">변경 내역</div>
+        <div class="rate-history-list" id="rateHistoryList"></div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="cumDetailModal" style="display:none;">
+    <div class="modal-box wide" style="max-height:78vh;overflow-y:auto;">
+      <div class="modal-title" id="cumDetailTitle" style="text-align:left;">쓴 돈 내역</div>
+      <div id="cumDetailBody"></div>
+      <div class="modal-actions" style="margin-top:20px;">
+        <button class="ghost" id="cumDetailCloseBtn">닫기</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+/* ============================================================
+   Firebase 설정 — 아래 값을 본인 Firebase 프로젝트 값으로 교체
+   console.firebase.google.com > 프로젝트 생성 > 프로젝트 설정
+   > "내 앱"에서 웹 앱 추가 후 나오는 값을 붙여넣으면 됩니다.
+   Firestore Database도 별도로 활성화해야 합니다.
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.firebasestorage.app",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+/* ---------- 여행 정보 ---------- */
+const MEMBERS = ['핸','현'];
+const MEMBER_EMOJI = {'핸':'🐻‍❄️','현':'🐱'};
+const DEFAULT_RATE = 201.73;   // 1 CNY = ? KRW
+
+/* ---------- 표기 형식 ---------- */
+function fmtCny(v){
+  return '¥'+(v||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtKrw(v){
+  return '₩'+Math.round(v||0).toLocaleString('ko-KR');
+}
+function fmtRateNum(v){
+  return (v||0).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+/* 이름 뒤 조사 이/가 자동 선택 (받침 있으면 '이') */
+function withSubj(name){
+  const c = name.charCodeAt(name.length-1);
+  if(c<0xAC00 || c>0xD7A3) return name+'가';
+  return name+(((c-0xAC00)%28)!==0 ? '이' : '가');
+}
+
+function formatBeneficiaryNames(exp){
+  if(exp.beneficiaries.length === MEMBERS.length){
+    return MEMBERS.length+'명 모두';
+  }
+  return exp.beneficiaries.map(b=>b.name).join(', ');
+}
+
+let db = null;
+let firebaseReady = false;
+let rateHistory = [];
+let currentDefaultRate = DEFAULT_RATE;
+
+function initFirebase(){
+  if(firebaseConfig.apiKey === "YOUR_API_KEY"){
+    showSetupBanner();
+    return;
+  }
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    firebaseReady = true;
+    subscribeExpenses();
+    subscribeSettlements();
+    subscribeRateHistory();
+  }catch(e){
+    showSetupBanner(e.message);
+  }
+}
+
+function showSetupBanner(msg){
+  const el = document.getElementById('setupBanner');
+  el.style.display = 'block';
+  el.textContent = 'Firebase 설정이 필요합니다. 코드 상단 firebaseConfig 값을 본인 프로젝트 값으로 교체해주세요.' + (msg ? ' (' + msg + ')' : '');
+}
+
+/* ---------- state ---------- */
+let expenses = [];
+let settlements = {};
+let editingId = null;
+let lastEditedAmount = null;   // 'cny' | 'krw' — 자동 계산 기준
+let autoRateUsed = null;       // '자동'으로 채운 경우 그때 쓴 환율 (반올림 오차로 기준환율이 흔들리지 않게)
+
+let formState = {
+  payer: null,
+  beneficiaries: new Set(),
+  splitMode: 'equal',
+  customAmounts: {},
+  note: ''
+};
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>goTab(btn.dataset.tab));
+});
+function goTab(name){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+name));
+}
+
+/* ---------- payer / beneficiary pills ---------- */
+function renderPayerGroup(){
+  const el = document.getElementById('payerGroup');
+  el.innerHTML = '';
+  MEMBERS.forEach(name=>{
+    const b = document.createElement('button');
+    b.type='button'; b.className='pill'+(formState.payer===name?' on':'');
+    b.textContent = name;
+    b.addEventListener('click', ()=>{
+      const oldPayer = formState.payer;
+      formState.payer = name;
+      if(oldPayer && oldPayer !== name){
+        formState.beneficiaries.delete(oldPayer);
+      }
+      formState.beneficiaries.add(name);
+      renderPayerGroup();
+      renderBeneficiaryGroup();
+      if(formState.splitMode==='custom') renderCustomSplit();
+    });
+    el.appendChild(b);
+  });
+}
+
+function renderBeneficiaryGroup(){
+  const el = document.getElementById('beneficiaryGroup');
+  el.innerHTML = '';
+  MEMBERS.forEach(name=>{
+    const b = document.createElement('button');
+    b.type='button'; b.className='pill'+(formState.beneficiaries.has(name)?' on':'');
+    b.textContent = name;
+    b.addEventListener('click', ()=>{
+      if(formState.beneficiaries.has(name)) formState.beneficiaries.delete(name);
+      else formState.beneficiaries.add(name);
+      renderBeneficiaryGroup();
+      if(formState.splitMode==='custom') renderCustomSplit();
+    });
+    el.appendChild(b);
+  });
+}
+
+document.getElementById('btnAllMembers').textContent = '전체 '+MEMBERS.length+'인';
+document.getElementById('btnAllMembers').addEventListener('click', ()=>{
+  MEMBERS.forEach(m=>formState.beneficiaries.add(m));
+  renderBeneficiaryGroup();
+  if(formState.splitMode==='custom') renderCustomSplit();
+});
+
+/* ---------- 금액 입력 (위안화·원화 수동 입력 + 자동 계산) ---------- */
+const cnyInput = document.getElementById('cnyInput');
+const krwInput = document.getElementById('krwInput');
+
+function updateRatePreview(){
+  const cny = parseFloat(cnyInput.value);
+  const krw = parseFloat(krwInput.value);
+  const rateEl = document.getElementById('rateInput');
+  if(autoRateUsed){
+    rateEl.value = autoRateUsed.toFixed(2);
+  }else if(cny>0 && krw>0){
+    rateEl.value = (krw/cny).toFixed(2);
+  }else{
+    rateEl.value = '';
+  }
+}
+
+cnyInput.addEventListener('input', ()=>{
+  lastEditedAmount = 'cny';
+  autoRateUsed = null;
+  updateRatePreview();
+  if(formState.splitMode==='custom') renderSplitTotal();
+});
+krwInput.addEventListener('input', ()=>{
+  lastEditedAmount = 'krw';
+  autoRateUsed = null;
+  updateRatePreview();
+});
+
+document.getElementById('btnAutoCalc').addEventListener('click', ()=>{
+  const cny = parseFloat(cnyInput.value);
+  const krw = parseFloat(krwInput.value);
+  const r = currentDefaultRate;
+  let src;
+  if(cny>0 && !(krw>0)) src = 'cny';
+  else if(krw>0 && !(cny>0)) src = 'krw';
+  else if(cny>0 && krw>0) src = lastEditedAmount || 'cny';
+  else { alert('위안화나 원화 중 하나를 먼저 입력해주세요.'); return; }
+
+  if(src==='cny'){
+    krwInput.value = Math.round(cny*r);
+  }else{
+    cnyInput.value = (krw/r).toFixed(2);
+  }
+  autoRateUsed = r;
+  updateRatePreview();
+  if(formState.splitMode==='custom') renderSplitTotal();
+});
+
+/* ---------- split mode ---------- */
+document.getElementById('splitEqualBtn').addEventListener('click', ()=>{
+  formState.splitMode = 'equal';
+  document.getElementById('splitEqualBtn').classList.add('on');
+  document.getElementById('splitCustomBtn').classList.remove('on');
+  document.getElementById('customSplitList').style.display='none';
+});
+document.getElementById('splitCustomBtn').addEventListener('click', ()=>{
+  formState.splitMode = 'custom';
+  document.getElementById('splitCustomBtn').classList.add('on');
+  document.getElementById('splitEqualBtn').classList.remove('on');
+  document.getElementById('customSplitList').style.display='flex';
+  renderCustomSplit();
+});
+
+function renderCustomSplit(){
+  const el = document.getElementById('customSplitList');
+  const total = parseFloat(cnyInput.value) || 0;
+  const names = Array.from(formState.beneficiaries);
+  const equalShare = names.length ? (total/names.length) : 0;
+
+  Object.keys(formState.customAmounts).forEach(k=>{
+    if(!names.includes(k)) delete formState.customAmounts[k];
+  });
+
+  el.innerHTML = '';
+  names.forEach(name=>{
+    if(formState.customAmounts[name] === undefined){
+      formState.customAmounts[name] = equalShare.toFixed(2);
+    }
+    const row = document.createElement('div');
+    row.className='split-item';
+    const label = document.createElement('span');
+    label.textContent = name;
+    const input = document.createElement('input');
+    input.type='number'; input.step='0.01'; input.min='0';
+    input.className='mono';
+    input.value = formState.customAmounts[name];
+    input.addEventListener('input', ()=>{
+      formState.customAmounts[name] = input.value;
+      renderSplitTotal();
+    });
+    row.appendChild(label);
+    row.appendChild(input);
+    el.appendChild(row);
+  });
+
+  renderSplitTotal();
+}
+
+function renderSplitTotal(){
+  const el = document.getElementById('customSplitList');
+  const old = el.querySelector('.split-total');
+  if(old) old.remove();
+  const total = parseFloat(cnyInput.value) || 0;
+  const sum = Object.values(formState.customAmounts).reduce((a,v)=>a+(parseFloat(v)||0),0);
+  const diff = total - sum;
+  const div = document.createElement('div');
+  div.className = 'split-total' + (Math.abs(diff)>0.01 ? ' mismatch':'');
+  div.innerHTML = '<span>배분 합계</span><span class="mono">'+fmtCny(sum)+' / '+fmtCny(total)+(Math.abs(diff)>0.01? ' (차이 '+fmtCny(diff)+')':'')+'</span>';
+  el.appendChild(div);
+}
+
+/* ---------- memo ---------- */
+document.getElementById('memoSelect').addEventListener('change', (e)=>{
+  const customInput = document.getElementById('memoCustomInput');
+  if(e.target.value === '__custom'){
+    customInput.style.display='block';
+    customInput.focus();
+  }else{
+    customInput.style.display='none';
+  }
+});
+
+function getMemoValue(){
+  const sel = document.getElementById('memoSelect');
+  if(sel.value === '__custom'){
+    return document.getElementById('memoCustomInput').value.trim();
+  }
+  return sel.value;
+}
+
+/* ---------- save ---------- */
+document.getElementById('saveBtn').addEventListener('click', saveExpense);
+
+function saveExpense(){
+  if(!firebaseReady){ showSetupBanner(); return; }
+
+  const totalCny = parseFloat(cnyInput.value);
+  const totalKrw = parseFloat(krwInput.value);
+  const names = Array.from(formState.beneficiaries);
+  const memo = getMemoValue();
+
+  if(!formState.payer){ alert('결제자를 선택해주세요.'); return; }
+  if(!totalCny || totalCny<=0){ alert('위안화 금액을 입력해주세요. (하나만 알면 \'자동\' 버튼을 눌러주세요)'); return; }
+  if(!totalKrw || totalKrw<=0){ alert('원화 금액을 입력해주세요. (하나만 알면 \'자동\' 버튼을 눌러주세요)'); return; }
+  if(names.length===0){ alert('분담 인원을 선택해주세요.'); return; }
+  if(!memo){ alert('적요를 선택해주세요.'); return; }
+
+  const rate = autoRateUsed || (totalKrw/totalCny);
+
+  let beneficiaries;
+  if(formState.splitMode==='equal'){
+    beneficiaries = names.map(n=>({name:n, cny:totalCny/names.length, krw:totalKrw/names.length}));
+  }else{
+    const sum = names.reduce((a,n)=>a+(parseFloat(formState.customAmounts[n])||0),0);
+    if(Math.abs(sum-totalCny) > 0.01){
+      alert('직접 배분 금액의 합이 총 지출액과 일치하지 않습니다.');
+      return;
+    }
+    // 원화는 위안화 배분 비율대로 나눔
+    beneficiaries = names.map(n=>{
+      const c = parseFloat(formState.customAmounts[n])||0;
+      return {name:n, cny:c, krw: totalKrw * (c/totalCny)};
+    });
+  }
+
+  const existing = editingId ? expenses.find(e=>e.id===editingId) : null;
+  const record = {
+    payer: formState.payer,
+    beneficiaries,
+    splitMode: formState.splitMode,
+    totalCny,
+    totalKrw,
+    rate,
+    memo,
+    note: document.getElementById('noteInput').value.trim(),
+    createdAt: existing ? existing.createdAt : Date.now()
+  };
+
+  const done = ()=>{ document.getElementById('savedModal').style.display = 'flex'; };
+  const fail = (err)=>{ alert('저장 중 오류가 발생했습니다.\n('+err.message+')'); console.error(err); };
+  if(editingId){
+    db.collection('expenses').doc(editingId).set(record).then(done).catch(fail);
+  }else{
+    db.collection('expenses').add(record).then(done).catch(fail);
+  }
+}
+
+function resetFormFully(){
+  editingId = null;
+  lastEditedAmount = null;
+  autoRateUsed = null;
+  formState.payer = null;
+  formState.beneficiaries = new Set();
+  formState.splitMode = 'equal';
+  formState.customAmounts = {};
+  formState.note = '';
+
+  cnyInput.value = '';
+  krwInput.value = '';
+  document.getElementById('rateInput').value = '';
+  document.getElementById('memoSelect').value = '';
+  document.getElementById('memoCustomInput').value = '';
+  document.getElementById('memoCustomInput').style.display = 'none';
+  document.getElementById('noteInput').value = '';
+  document.getElementById('editingNotice').style.display = 'none';
+
+  document.getElementById('splitEqualBtn').classList.add('on');
+  document.getElementById('splitCustomBtn').classList.remove('on');
+  document.getElementById('customSplitList').style.display = 'none';
+
+  renderPayerGroup();
+  renderBeneficiaryGroup();
+}
+
+document.getElementById('modalConfirmBtn').addEventListener('click', ()=>{
+  document.getElementById('savedModal').style.display = 'none';
+  resetFormFully();
+  goTab('list');
+});
+document.getElementById('modalContinueBtn').addEventListener('click', ()=>{
+  document.getElementById('savedModal').style.display = 'none';
+  resetFormFully();
+});
+
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  if(!confirm('정말 초기화하시겠습니까? 입력 중인 내용은 저장되지 않습니다.')) return;
+  resetFormFully();
+  goTab('status');
+});
+
+document.getElementById('cancelBtn').addEventListener('click', ()=>{
+  resetFormFully();
+  goTab('list');
+});
+
+/* ---------- 기본 환율 변경 모달 ---------- */
+document.getElementById('rateSettingBtn').addEventListener('click', ()=>{
+  document.getElementById('newRateInput').value = currentDefaultRate.toFixed(2);
+  document.getElementById('rateModal').style.display = 'flex';
+});
+document.getElementById('rateModalCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('rateModal').style.display = 'none';
+});
+document.getElementById('rateModalSaveBtn').addEventListener('click', ()=>{
+  const newRate = parseFloat(document.getElementById('newRateInput').value);
+  if(!newRate || newRate<=0){ alert('환율을 올바르게 입력해주세요.'); return; }
+  if(!firebaseReady){ showSetupBanner(); return; }
+  db.collection('rateHistory').add({rate:newRate, changedAt:Date.now()}).then(()=>{
+    document.getElementById('rateModal').style.display = 'none';
+  }).catch(err=>{
+    alert('환율 변경 중 오류가 발생했습니다.\n('+err.message+')');
+    console.error(err);
+  });
+});
+
+/* ---------- 기본환율 결정: 수동 변경과 최근 지출 건 중 더 최근 것 ---------- */
+function getRateTimeline(){
+  const manual = rateHistory.map(h=>({at:h.changedAt, rate:h.rate, source:'수동 변경'}));
+  const fromExp = expenses.map(e=>({at:e.createdAt, rate:e.rate, source:'지출 · '+e.memo}));
+  return manual.concat(fromExp).sort((a,b)=>b.at-a.at);
+}
+
+function recomputeDefaultRate(){
+  const timeline = getRateTimeline();
+  currentDefaultRate = timeline.length ? timeline[0].rate : DEFAULT_RATE;
+  updateRateDisplay();
+  renderRateHistory();
+}
+
+/* ---------- firestore subscriptions ---------- */
+function subscribeExpenses(){
+  db.collection('expenses').orderBy('createdAt','asc').onSnapshot(snap=>{
+    expenses = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
+    recomputeDefaultRate();
+    renderSummary();
+    renderDebtList();
+    renderCategoryStats();
+    renderPayerStats();
+    renderCumulativeSummary();
+    renderExpenseList();
+  });
+}
+function subscribeSettlements(){
+  db.collection('settlements').onSnapshot(snap=>{
+    settlements = {};
+    snap.docs.forEach(d=>{ settlements[d.id] = d.data(); });
+    renderDebtList();
+    renderCumulativeSummary();
+    renderExpenseList();
+  });
+}
+
+function subscribeRateHistory(){
+  db.collection('rateHistory').orderBy('changedAt','desc').onSnapshot(snap=>{
+    rateHistory = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
+    recomputeDefaultRate();
+  });
+}
+
+function updateRateDisplay(){
+  document.getElementById('currentRateDisplay').textContent = '₩'+fmtRateNum(currentDefaultRate);
+  document.getElementById('autoRateHint').textContent = '하나만 입력하고 누르면 최근 환율 ₩'+fmtRateNum(currentDefaultRate)+'로 나머지를 채워요';
+}
+
+function renderRateHistory(){
+  const el = document.getElementById('rateHistoryList');
+  const timeline = getRateTimeline();
+  if(timeline.length===0){
+    el.innerHTML = '<div class="empty-state" style="border-top:none;padding:16px 0;">변경 내역이 없습니다</div>';
+    return;
+  }
+  el.innerHTML = timeline.map(h=>{
+    const dateStr = new Date(h.at).toLocaleString('ko-KR', {
+      timeZone:'Asia/Seoul', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'
+    });
+    return '<div class="rate-history-row">'+
+      '<span class="rate-history-date">'+dateStr+' · '+h.source+'</span>'+
+      '<span class="rate-history-value mono">₩'+fmtRateNum(h.rate)+'</span>'+
+    '</div>';
+  }).join('');
+}
+
+/* ---------- 정산 추적 단위: 지출 건 하나 x 그 건의 분담 인원 하나 ---------- */
+function debtLineKey(expenseId, beneficiaryName){
+  return expenseId+'__'+beneficiaryName;
+}
+
+function getAllDebtLines(){
+  const lines = [];
+  expenses.forEach(exp=>{
+    exp.beneficiaries.forEach(b=>{
+      if(b.name === exp.payer) return;
+      const key = debtLineKey(exp.id, b.name);
+      lines.push({
+        from: b.name,
+        to: exp.payer,
+        memo: exp.memo,
+        cny: b.cny,
+        krw: b.krw,
+        key,
+        settled: !!(settlements[key] && settlements[key].settled)
+      });
+    });
+  });
+  return lines;
+}
+
+/* ---------- calculation (미정산 라인만 모아 KRW 기준 순액 상계) ---------- */
+function computePairSummaries(){
+  const allLines = getAllDebtLines();
+  const pairs = [];
+  for(let i=0;i<MEMBERS.length;i++){
+    for(let j=i+1;j<MEMBERS.length;j++){
+      const a = MEMBERS[i], b = MEMBERS[j];
+      const linesForPair = allLines.filter(l=>
+        (l.from===a && l.to===b) || (l.from===b && l.to===a)
+      );
+      const unsettled = linesForPair.filter(l=>!l.settled);
+      if(unsettled.length===0) continue;
+
+      let owedAB_krw=0, owedBA_krw=0, owedAB_cny=0, owedBA_cny=0;
+      unsettled.forEach(l=>{
+        if(l.from===a){ owedAB_krw += l.krw; owedAB_cny += l.cny; }
+        else{ owedBA_krw += l.krw; owedBA_cny += l.cny; }
+      });
+      const net = owedAB_krw - owedBA_krw;
+      const netCny = owedAB_cny - owedBA_cny;
+      const pairKey = [a,b].sort().join('_');
+
+      if(Math.abs(net) >= 1){
+        const from = net>0 ? a : b;
+        const to = net>0 ? b : a;
+        pairs.push({kind:'net', a, b, from, to, krw:Math.abs(net), cny:Math.abs(netCny), pairKey, lines:unsettled});
+      }else{
+        pairs.push({kind:'zero', a, b, krw:0, cny:0, pairKey, lines:unsettled});
+      }
+    }
+  }
+  return pairs;
+}
+
+/* ---------- render: summary ---------- */
+function renderSummary(){
+  const totalCny = expenses.reduce((a,e)=>a+e.totalCny,0);
+  const totalKrw = expenses.reduce((a,e)=>a+e.totalKrw,0);
+  document.getElementById('totalCny').textContent = fmtCny(totalCny);
+  document.getElementById('totalKrw').textContent = fmtKrw(totalKrw);
+}
+
+/* ---------- render: 정산 필요 금액 (체크는 대기 상태로만 표시, '정산 완료' 버튼으로 일괄 확정) ---------- */
+let expandedPairs = new Set();
+let pendingSettleKeys = new Set();
+
+function buildPairGroupEl(p){
+  const expanded = expandedPairs.has(p.pairKey);
+  const label = p.kind==='net' ? (p.from+' → '+p.to) : (p.a+' · '+p.b);
+  const amountText = p.kind==='net'
+    ? (fmtCny(p.cny)+'<span class="stat-sub">'+fmtKrw(p.krw)+'</span>')
+    : (fmtCny(0)+'<span class="stat-sub">₩0 · 세부 확인</span>');
+  const allPending = p.lines.every(l=>pendingSettleKeys.has(l.key));
+
+  const group = document.createElement('div');
+  group.className = 'debt-group';
+
+  const row = document.createElement('div');
+  row.className = 'debt-row';
+  row.innerHTML =
+    '<button class="debt-check'+(allPending?' checked':'')+'" data-pair="'+p.pairKey+'" title="이 쌍의 미정산 건 전부 체크"></button>'+
+    '<div class="debt-main">'+label+'</div>'+
+    '<div class="debt-amount mono">'+amountText+'</div>'+
+    '<button class="debt-expand-toggle'+(expanded?' up':'')+'" data-pair="'+p.pairKey+'"><span class="chevron"></span></button>';
+  group.appendChild(row);
+
+  const detail = document.createElement('div');
+  detail.className = 'debt-detail-list';
+  detail.style.display = expanded ? 'flex' : 'none';
+  detail.innerHTML = p.lines.map(l=>
+    '<div class="debt-detail-row">'+
+      '<button class="debt-check-sm'+(pendingSettleKeys.has(l.key)?' checked':'')+'" data-line="'+l.key+'"></button>'+
+      '<div class="debt-detail-main">'+l.from+' → '+l.to+' <span class="debt-detail-memo">('+l.memo+')</span></div>'+
+      '<div class="debt-detail-amount mono">'+fmtCny(l.cny)+'<span class="stat-sub">'+fmtKrw(l.krw)+'</span></div>'+
+    '</div>'
+  ).join('');
+  group.appendChild(detail);
+
+  row.addEventListener('click', ()=>{
+    if(expandedPairs.has(p.pairKey)) expandedPairs.delete(p.pairKey);
+    else expandedPairs.add(p.pairKey);
+    renderDebtList();
+  });
+
+  return group;
+}
+
+function renderDebtList(){
+  const el = document.getElementById('debtList');
+  const pairs = computePairSummaries();
+  if(pairs.length===0){
+    el.innerHTML = '<div class="empty-state">정산할 내역이 없습니다</div>';
+    updateConfirmSettleBtn();
+    return;
+  }
+  el.innerHTML = '';
+
+  const netPairs = pairs.filter(p=>p.kind==='net');
+  const zeroPairs = pairs.filter(p=>p.kind==='zero');
+
+  MEMBERS.forEach(name=>{
+    const mine = netPairs.filter(p=>p.from===name);
+    if(mine.length===0) return;
+    const header = document.createElement('div');
+    header.className = 'debt-group-header';
+    header.textContent = MEMBER_EMOJI[name]+' '+withSubj(name)+' 정산할 것';
+    el.appendChild(header);
+    const section = document.createElement('div');
+    section.className = 'debt-section';
+    mine.forEach(p=> section.appendChild(buildPairGroupEl(p)));
+    el.appendChild(section);
+  });
+
+  if(zeroPairs.length>0){
+    const header = document.createElement('div');
+    header.className = 'debt-group-header';
+    header.textContent = '확인 필요 (방향 미정)';
+    el.appendChild(header);
+    const section = document.createElement('div');
+    section.className = 'debt-section';
+    zeroPairs.forEach(p=> section.appendChild(buildPairGroupEl(p)));
+    el.appendChild(section);
+  }
+
+  el.querySelectorAll('.debt-check').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const pair = pairs.find(p=>p.pairKey===btn.dataset.pair);
+      if(!pair) return;
+      const allPending = pair.lines.every(l=>pendingSettleKeys.has(l.key));
+      pair.lines.forEach(l=>{
+        if(allPending) pendingSettleKeys.delete(l.key);
+        else pendingSettleKeys.add(l.key);
+      });
+      renderDebtList();
+    });
+  });
+
+  el.querySelectorAll('.debt-check-sm').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const key = btn.dataset.line;
+      if(pendingSettleKeys.has(key)) pendingSettleKeys.delete(key);
+      else pendingSettleKeys.add(key);
+      renderDebtList();
+    });
+  });
+
+  updateConfirmSettleBtn();
+}
+
+function updateConfirmSettleBtn(){
+  const btn = document.getElementById('confirmSettleBtn');
+  if(!btn) return;
+  btn.disabled = pendingSettleKeys.size===0;
+}
+
+document.getElementById('confirmSettleBtn').addEventListener('click', ()=>{
+  if(pendingSettleKeys.size===0) return;
+  if(!confirm('체크한 항목들이 모두 정산되었나요?')) return;
+  if(!firebaseReady){ showSetupBanner(); return; }
+
+  const keysToSettle = Array.from(pendingSettleKeys);
+  pendingSettleKeys.clear();
+  updateConfirmSettleBtn();
+
+  const batch = db.batch();
+  keysToSettle.forEach(key=>{
+    batch.set(db.collection('settlements').doc(key), {settled:true, updatedAt:Date.now()});
+  });
+  batch.commit().catch(err=>{
+    alert('정산 처리 중 오류가 발생했습니다. 다시 시도해주세요.\n('+err.message+')');
+    console.error('정산 완료 처리 실패:', err);
+  });
+});
+
+/* ---------- render: payer stats (누가 몇 건, 얼마 결제했는지) ---------- */
+function renderPayerStats(){
+  const el = document.getElementById('payerStats');
+  if(expenses.length===0){ el.innerHTML=''; return; }
+
+  const byPayer = {};
+  MEMBERS.forEach(m=>{ byPayer[m] = {count:0, cny:0, krw:0}; });
+  expenses.forEach(exp=>{
+    if(!byPayer[exp.payer]) return;
+    byPayer[exp.payer].count += 1;
+    byPayer[exp.payer].cny += exp.totalCny;
+    byPayer[exp.payer].krw += exp.totalKrw;
+  });
+
+  const rows = MEMBERS
+    .filter(m=>byPayer[m].count>0)
+    .sort((a,b)=>byPayer[b].cny-byPayer[a].cny);
+
+  el.innerHTML = rows.map(name=>{
+    const r = byPayer[name];
+    return '<div class="stat-row">'+
+      '<span class="stat-memo">'+name+'</span>'+
+      '<span class="stat-value mono">'+fmtCny(r.cny)+'<span class="stat-sub">'+fmtKrw(r.krw)+'</span></span>'+
+      '<span class="stat-pct mono">'+r.count+'건</span>'+
+    '</div>';
+  }).join('');
+}
+
+/* ---------- render: 누적 정산 현황 (가계부·더블체크용, 정산완료 건도 계속 남아 보임) ---------- */
+let cumExpanded = new Set();
+
+function renderCumulativeSummary(){
+  const el = document.getElementById('cumulativeSummary');
+  const badgeEl = document.getElementById('cumBadgeGrid');
+  if(!el || !badgeEl) return;
+
+  // 인원수에 맞춘 배지 배치: 2명 이하면 한 줄, 그 이상은 2열
+  const cols = MEMBERS.length<=2 ? MEMBERS.length : 2;
+  badgeEl.style.gridTemplateColumns = 'repeat('+cols+',1fr)';
+
+  badgeEl.innerHTML = MEMBERS.map(name=>
+    '<button class="cum-badge'+(cumExpanded.has(name)?' on':'')+'" data-name="'+name+'">'+MEMBER_EMOJI[name]+' '+name+'</button>'
+  ).join('');
+  badgeEl.querySelectorAll('.cum-badge').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const name = btn.dataset.name;
+      if(cumExpanded.has(name)) cumExpanded.delete(name);
+      else cumExpanded.add(name);
+      renderCumulativeSummary();
+    });
+  });
+
+  if(expenses.length===0){ el.innerHTML = '<div class="cum-empty">아직 지출 내역이 없습니다</div>'; return; }
+  if(cumExpanded.size===0){ el.innerHTML = ''; return; }
+
+  const ownShare = {};
+  MEMBERS.forEach(m=>{ ownShare[m] = {cny:0, krw:0}; });
+  expenses.forEach(exp=>{
+    exp.beneficiaries.forEach(b=>{
+      if(!ownShare[b.name]) return;
+      ownShare[b.name].cny += b.cny;
+      ownShare[b.name].krw += b.krw;
+    });
+  });
+
+  const flow = {};
+  MEMBERS.forEach(m=>{ flow[m] = {}; MEMBERS.forEach(o=>{ if(o!==m) flow[m][o] = {settledKrw:0, unsettledKrw:0, settledCny:0, unsettledCny:0}; }); });
+  getAllDebtLines().forEach(l=>{
+    if(!flow[l.from] || !flow[l.from][l.to]) return;
+    if(l.settled){ flow[l.from][l.to].settledKrw += l.krw; flow[l.from][l.to].settledCny += l.cny; }
+    else{ flow[l.from][l.to].unsettledKrw += l.krw; flow[l.from][l.to].unsettledCny += l.cny; }
+  });
+
+  function lineHtml(tag, cls, label, cny, krw){
+    return '<div class="cum-line '+cls+'">'+
+      '<span>'+tag+' '+label+'</span>'+
+      '<span class="cum-amount">'+
+        '<span class="cum-amount-main mono">'+fmtCny(cny)+'</span>'+
+        '<span class="cum-amount-sub mono">'+fmtKrw(krw)+'</span>'+
+      '</span>'+
+    '</div>';
+  }
+
+  el.innerHTML = MEMBERS.filter(name=>cumExpanded.has(name)).map(name=>{
+    const sendRows = [];
+    const receiveRows = [];
+    MEMBERS.forEach(other=>{
+      if(other===name) return;
+      const out = flow[name][other];
+      const inn = flow[other][name];
+      if(out.unsettledCny >= 0.01) sendRows.push(lineHtml('[미정산]','unsettled', other+'에게', out.unsettledCny, out.unsettledKrw));
+      if(out.settledCny >= 0.01) sendRows.push(lineHtml('[정산완료]','settled', other+'에게', out.settledCny, out.settledKrw));
+      if(inn.unsettledCny >= 0.01) receiveRows.push(lineHtml('[미정산]','unsettled', other+'로부터', inn.unsettledCny, inn.unsettledKrw));
+      if(inn.settledCny >= 0.01) receiveRows.push(lineHtml('[정산완료]','settled', other+'로부터', inn.settledCny, inn.settledKrw));
+    });
+    const sendHtml = sendRows.length ? sendRows.join('') : '<div class="cum-empty">보낼 돈 없음</div>';
+    const receiveHtml = receiveRows.length ? receiveRows.join('') : '<div class="cum-empty">받을 돈 없음</div>';
+    const t = ownShare[name];
+    return '<div class="cum-person">'+
+      '<div class="cum-person-header">'+MEMBER_EMOJI[name]+' '+name+'</div>'+
+      '<div class="cum-total">쓴 돈 총액 <button class="mono cum-total-trigger" data-name="'+name+'">'+fmtCny(t.cny)+' · '+fmtKrw(t.krw)+'</button></div>'+
+      '<div class="cum-section-label">보내주어야 하는 금액</div>'+
+      sendHtml+
+      '<div class="cum-section-label">받아야 하는 금액</div>'+
+      receiveHtml+
+    '</div>';
+  }).join('');
+
+  el.querySelectorAll('.cum-total-trigger').forEach(btn=>{
+    btn.addEventListener('click', ()=> openCumDetailModal(btn.dataset.name));
+  });
+}
+
+/* ---------- 쓴 돈 총액 클릭 시: 적요별 지출 상세 팝업 ---------- */
+let cumDetailExpanded = new Set();
+let cumDetailPerson = null;
+
+function openCumDetailModal(name){
+  cumDetailPerson = name;
+  cumDetailExpanded = new Set();
+  document.getElementById('cumDetailTitle').textContent = MEMBER_EMOJI[name]+' '+withSubj(name)+' 쓴 돈';
+  renderCumDetailBody();
+  document.getElementById('cumDetailModal').style.display = 'flex';
+}
+
+function renderCumDetailBody(){
+  const el = document.getElementById('cumDetailBody');
+  const name = cumDetailPerson;
+  if(!name) return;
+
+  const byMemo = {};
+  expenses.forEach(exp=>{
+    const b = exp.beneficiaries.find(x=>x.name===name);
+    if(!b) return;
+    if(!byMemo[exp.memo]) byMemo[exp.memo] = [];
+    byMemo[exp.memo].push({exp, share:b});
+  });
+  const memos = Object.keys(byMemo);
+
+  if(memos.length===0){ el.innerHTML = '<div class="cum-empty">내역이 없습니다</div>'; return; }
+
+  let grandCny = 0, grandKrw = 0;
+  memos.forEach(memo=>{
+    byMemo[memo].forEach(item=>{ grandCny += item.share.cny; grandKrw += item.share.krw; });
+  });
+
+  const totalRowHtml =
+    '<div class="cum-detail-total-row">'+
+      '<span class="label">총액</span>'+
+      '<span class="mono">'+fmtCny(grandCny)+' · <span class="popup-krw">'+fmtKrw(grandKrw)+'</span></span>'+
+    '</div>';
+
+  const groupsHtml = memos.map(memo=>{
+    const items = byMemo[memo];
+    const expanded = cumDetailExpanded.has(memo);
+    const catCny = items.reduce((s,it)=>s+it.share.cny,0);
+    const catKrw = items.reduce((s,it)=>s+it.share.krw,0);
+
+    const rows = items.map((item, idx)=>{
+      const exp = item.exp, b = item.share;
+      const benNames = formatBeneficiaryNames(exp);
+      return '<div class="cat-detail-row">'+
+        '<div class="cat-detail-left">'+
+          '<span class="cat-detail-num mono">'+(idx+1)+'.</span>'+
+          '<span class="cat-detail-amount mono">'+fmtCny(b.cny)+' <span class="cat-detail-sub popup-krw">'+fmtKrw(b.krw)+'</span></span>'+
+          (exp.note ? '<span class="cat-detail-memo">└ '+exp.note+'</span>' : '')+
+        '</div>'+
+        '<div class="cat-detail-right">'+
+          '<div class="cat-detail-people">결제자: '+exp.payer+' ('+fmtCny(exp.totalCny)+')</div>'+
+          '<div class="cat-detail-people">분담 인원: '+benNames+'</div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+
+    return '<div class="cat-group">'+
+      '<div class="cat-group-header" data-memo="'+memo+'">'+
+        '<span class="cat-group-name">'+memo+'</span>'+
+        '<span class="cat-group-right">'+
+          '<span class="cat-group-total mono">'+fmtCny(catCny)+' · <span class="popup-krw">'+fmtKrw(catKrw)+'</span></span>'+
+          '<button class="debt-expand-toggle'+(expanded?' up':'')+'"><span class="chevron"></span></button>'+
+        '</span>'+
+      '</div>'+
+      '<div class="cat-detail-list" style="display:'+(expanded?'flex':'none')+';">'+rows+'</div>'+
+    '</div>';
+  }).join('');
+
+  el.innerHTML = totalRowHtml + groupsHtml;
+
+  el.querySelectorAll('.cat-group-header').forEach(h=>{
+    h.addEventListener('click', ()=>{
+      const memo = h.dataset.memo;
+      if(cumDetailExpanded.has(memo)) cumDetailExpanded.delete(memo);
+      else cumDetailExpanded.add(memo);
+      renderCumDetailBody();
+    });
+  });
+}
+
+document.getElementById('cumDetailCloseBtn').addEventListener('click', ()=>{
+  document.getElementById('cumDetailModal').style.display = 'none';
+});
+
+/* ---------- render: category stats ---------- */
+function renderCategoryStats(){
+  const el = document.getElementById('categoryStats');
+  if(expenses.length===0){ el.innerHTML=''; return; }
+
+  const byMemo = {};
+  let totalCny = 0;
+  expenses.forEach(exp=>{
+    if(!byMemo[exp.memo]) byMemo[exp.memo] = {cny:0, krw:0};
+    byMemo[exp.memo].cny += exp.totalCny;
+    byMemo[exp.memo].krw += exp.totalKrw;
+    totalCny += exp.totalCny;
+  });
+
+  const rows = Object.keys(byMemo)
+    .map(memo=>Object.assign({memo}, byMemo[memo], {pct: totalCny ? byMemo[memo].cny/totalCny*100 : 0}))
+    .sort((a,b)=>b.cny-a.cny);
+
+  el.innerHTML = rows.map(r=>
+    '<div class="stat-row">'+
+      '<span class="stat-memo">'+r.memo+'</span>'+
+      '<span class="stat-value mono">'+fmtCny(r.cny)+'<span class="stat-sub">'+fmtKrw(r.krw)+'</span></span>'+
+      '<span class="stat-pct mono">'+r.pct.toFixed(0)+'%</span>'+
+    '</div>'
+  ).join('');
+}
+
+/* ---------- 지출 건 단위 정산완료 여부 (그 건에 얽힌 모든 개별 라인이 정산완료일 때) ---------- */
+function isExpenseSettled(exp){
+  return exp.beneficiaries.every(b=>{
+    if(b.name === exp.payer) return true;
+    const key = debtLineKey(exp.id, b.name);
+    return settlements[key] && settlements[key].settled;
+  });
+}
+
+/* ---------- render: expense list ---------- */
+function renderExpenseList(){
+  const el = document.getElementById('expenseList');
+  if(expenses.length===0){
+    el.innerHTML = '<div class="empty-state">입력된 지출이 없습니다</div>';
+    return;
+  }
+  const unsettled = expenses.filter(exp=>!isExpenseSettled(exp));
+  const settled = expenses.filter(exp=>isExpenseSettled(exp));
+  const ordered = unsettled.concat(settled);
+
+  el.innerHTML = '';
+  ordered.forEach(exp=>{
+    const benNames = formatBeneficiaryNames(exp);
+    const settledNow = isExpenseSettled(exp);
+    const row = document.createElement('div');
+    row.className = 'expense-row'+(settledNow?' settled':'');
+    row.innerHTML =
+      '<div class="expense-info">'+
+        '<div class="expense-memo">'+exp.memo+(exp.note?'<span class="expense-note"> · '+exp.note+'</span>':'')+'</div>'+
+        '<div class="expense-meta">결제자: '+exp.payer+'</div>'+
+        '<div class="expense-meta">분담 인원: '+benNames+'</div>'+
+      '</div>'+
+      '<div class="expense-right">'+
+        (settledNow?'<button class="settled-badge" data-id="'+exp.id+'" title="눌러서 정산 취소">정산완료 · 클릭해서 되돌리기</button>':'')+
+        '<div class="expense-amount-block">'+
+          '<div class="expense-amount mono">'+fmtCny(exp.totalCny)+'</div>'+
+          '<div class="expense-rate mono">'+fmtKrw(exp.totalKrw)+' · 환율 '+fmtRateNum(exp.rate)+'</div>'+
+        '</div>'+
+        '<div class="expense-btn-row">'+
+          '<button class="edit-btn" data-id="'+exp.id+'">수정</button>'+
+          '<button class="del-btn" data-id="'+exp.id+'">삭제</button>'+
+        '</div>'+
+      '</div>';
+    el.appendChild(row);
+  });
+  el.querySelectorAll('.edit-btn').forEach(b=>b.addEventListener('click', ()=>loadForEdit(b.dataset.id)));
+  el.querySelectorAll('.del-btn').forEach(b=>b.addEventListener('click', ()=>{
+    if(!firebaseReady) return;
+    if(confirm('이 항목을 삭제할까요?')){
+      db.collection('expenses').doc(b.dataset.id).delete();
+    }
+  }));
+  el.querySelectorAll('.settled-badge').forEach(b=>b.addEventListener('click', ()=>{
+    if(!firebaseReady) return;
+    const exp = expenses.find(e=>e.id===b.dataset.id);
+    if(!exp) return;
+    if(!confirm('정산 미완료 상태로 변경할까요?')) return;
+    const batch = db.batch();
+    exp.beneficiaries.forEach(ben=>{
+      if(ben.name===exp.payer) return;
+      batch.set(db.collection('settlements').doc(debtLineKey(exp.id, ben.name)), {settled:false, updatedAt:Date.now()});
+    });
+    batch.commit().catch(err=>{
+      alert('되돌리기 처리 중 오류가 발생했습니다. 다시 시도해주세요.\n('+err.message+')');
+      console.error('되돌리기 실패:', err);
+    });
+  }));
+}
+
+function loadForEdit(id){
+  const exp = expenses.find(e=>e.id===id);
+  if(!exp) return;
+  editingId = id;
+  lastEditedAmount = null;
+  autoRateUsed = null;
+  formState.payer = exp.payer;
+  formState.beneficiaries = new Set(exp.beneficiaries.map(b=>b.name));
+  formState.customAmounts = {};
+  exp.beneficiaries.forEach(b=>{ formState.customAmounts[b.name] = b.cny.toFixed(2); });
+
+  cnyInput.value = exp.totalCny;
+  krwInput.value = Math.round(exp.totalKrw);
+  updateRatePreview();
+  document.getElementById('noteInput').value = exp.note || '';
+
+  const memoOptions = Array.from(document.getElementById('memoSelect').options).map(o=>o.value);
+  if(memoOptions.includes(exp.memo)){
+    document.getElementById('memoSelect').value = exp.memo;
+    document.getElementById('memoCustomInput').style.display='none';
+  }else{
+    document.getElementById('memoSelect').value = '__custom';
+    document.getElementById('memoCustomInput').style.display='block';
+    document.getElementById('memoCustomInput').value = exp.memo;
+  }
+
+  renderPayerGroup();
+  renderBeneficiaryGroup();
+  if(exp.splitMode==='custom'){
+    document.getElementById('splitCustomBtn').click();
+  }else{
+    document.getElementById('splitEqualBtn').click();
+  }
+
+  document.getElementById('editingNotice').style.display='block';
+  document.getElementById('editingNotice').textContent = '"'+exp.memo+'" 항목 수정 중 — 저장하면 반영됩니다.';
+
+  goTab('input');
+}
+
+/* ---------- init ---------- */
+updateRateDisplay();
+renderPayerGroup();
+renderBeneficiaryGroup();
+initFirebase();
+</script>
+</body>
+</html>
